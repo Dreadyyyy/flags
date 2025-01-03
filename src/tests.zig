@@ -21,9 +21,9 @@ test "test parser" {
     const argv = [_][]const u8{ "-b", "-ni=1", "-nf", "1.23", "-s", "bar", "--", "-foo" };
     const idx = try parser.parse(&argv);
 
-    try testing.expect(b == true);
-    try testing.expect(ni == 1);
-    try testing.expect(nf == 1.23);
-    try testing.expect(std.mem.eql(u8, s, "bar"));
-    try testing.expect(idx == 7);
+    try testing.expectEqualDeep(b, true);
+    try testing.expectEqualDeep(ni, 1);
+    try testing.expectEqualDeep(nf, 1.23);
+    try testing.expectEqualDeep(s, "bar");
+    try testing.expectEqualDeep(idx, 7);
 }
