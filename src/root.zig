@@ -37,8 +37,8 @@ fn fromStr(comptime T: type) fn (*anyopaque, []const u8) FlagErr!void {
                 .Bool => true,
                 .Int => std.fmt.parseInt(T, str, 0) catch return FlagErr.ParseErr,
                 .Float => std.fmt.parseFloat(T, str) catch return FlagErr.ParseErr,
-                .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) str else unreachable,
-                inline else => unreachable,
+                .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) str else @compileError("Flag type not supported"),
+                inline else => @compileError("Flag type not supported"),
             };
         }
     }.func;
@@ -63,16 +63,13 @@ pub const Parser = struct {
         self.map.deinit();
     }
 
-    pub fn addBool(self: *Parser, ptr: *bool, flag: []const u8) !void {
-        try self.map.put(flag, Flag{ .has_param = false, .ptr = ptr, .fromStr = fromStr(bool) });
-    }
+    pub fn add(self: *Parser, ptr: anytype, flag: []const u8) !void {
+        const T = switch (@typeInfo(@TypeOf(ptr))) {
+            .Pointer => |pointer| pointer.child,
+            inline else => @compileError("Argument ptr must be a pointer"),
+        };
 
-    pub fn addNumeric(self: *Parser, comptime T: type, ptr: *T, flag: []const u8) !void {
-        try self.map.put(flag, Flag{ .has_param = true, .ptr = ptr, .fromStr = fromStr(T) });
-    }
-
-    pub fn addStr(self: *Parser, ptr: *[]const u8, flag: []const u8) !void {
-        try self.map.put(flag, Flag{ .has_param = true, .ptr = @ptrCast(ptr), .fromStr = fromStr([]const u8) });
+        try self.map.put(flag, Flag{ .has_param = T != bool, .ptr = @ptrCast(ptr), .fromStr = fromStr(T) });
     }
 
     pub fn parse(self: *const Parser, argv: []const []const u8) FlagErr!usize {

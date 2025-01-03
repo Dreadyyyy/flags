@@ -7,16 +7,16 @@ test "test parser" {
     defer parser.deinit();
 
     var b: bool = false;
-    try parser.addBool(&b, "-b");
+    try parser.add(&b, "-b");
 
     var ni: u8 = 0;
-    try parser.addNumeric(@TypeOf(ni), &ni, "-ni");
+    try parser.add(&ni, "-ni");
 
     var nf: f32 = 0;
-    try parser.addNumeric(@TypeOf(nf), &nf, "-nf");
+    try parser.add(&nf, "-nf");
 
     var s: []const u8 = "";
-    try parser.addStr(&s, "-s");
+    try parser.add(&s, "-s");
 
     const argv = [_][]const u8{ "-b", "-ni=1", "-nf", "1.23", "-s", "bar", "--", "-foo" };
     const idx = try parser.parse(&argv);
