@@ -5,27 +5,19 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib_mod = b.createModule(.{
+    const lib = b.addStaticLibrary(.{
+        .name = "flags",
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const lib = b.addStaticLibrary(.{
-        .name = "flags",
-        .root_module = lib_mod,
-    });
-
     b.installArtifact(lib);
 
-    const test_mod = b.createModule(.{
+    const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/tests.zig"),
         .target = target,
         .optimize = optimize,
-    });
-
-    const lib_unit_tests = b.addTest(.{
-        .root_module = test_mod,
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);

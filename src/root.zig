@@ -34,10 +34,10 @@ fn fromStr(comptime T: type) fn (*anyopaque, []const u8) FlagErr!void {
             const tptr: *T = @ptrCast(@alignCast(ptr));
 
             tptr.* = switch (@typeInfo(T)) {
-                .bool => true,
-                .int => std.fmt.parseInt(T, str, 0) catch return FlagErr.ParseErr,
-                .float => std.fmt.parseFloat(T, str) catch return FlagErr.ParseErr,
-                .pointer => |pointer| if (pointer.is_const and pointer.child == u8) str else unreachable,
+                .Bool => true,
+                .Int => std.fmt.parseInt(T, str, 0) catch return FlagErr.ParseErr,
+                .Float => std.fmt.parseFloat(T, str) catch return FlagErr.ParseErr,
+                .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) str else unreachable,
                 inline else => unreachable,
             };
         }
