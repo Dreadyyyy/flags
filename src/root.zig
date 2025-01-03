@@ -33,12 +33,17 @@ fn fromStr(comptime T: type) fn (*anyopaque, []const u8) FlagErr!void {
         fn func(ptr: *anyopaque, str: []const u8) FlagErr!void {
             const tptr: *T = @ptrCast(@alignCast(ptr));
 
-            tptr.* = switch (@typeInfo(T)) {
-                .Bool => true,
-                .Int => std.fmt.parseInt(T, str, 0) catch return FlagErr.ParseErr,
-                .Float => std.fmt.parseFloat(T, str) catch return FlagErr.ParseErr,
-                .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) str else @compileError("Flag type not supported"),
-                inline else => @compileError("Flag type not supported"),
+            comptime var tp = T;
+            tptr.* = blk: inline while (true) {
+                switch (@typeInfo(tp)) {
+                    .Bool => break :blk true,
+                    .Int => break :blk std.fmt.parseInt(tp, str, 0) catch return FlagErr.ParseErr,
+                    .Float => break :blk std.fmt.parseFloat(tp, str) catch return FlagErr.ParseErr,
+                    .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) break :blk str else @compileError("Flag type not supported"),
+                    .Optional => |opt| tp = opt.child,
+                    .ErrorUnion => |errun| tp = errun.payload,
+                    inline else => @compileError("Flag type not supported"),
+                }
             };
         }
     }.func;
@@ -69,7 +74,17 @@ pub const Parser = struct {
             inline else => @compileError("Argument ptr must be a pointer"),
         };
 
-        try self.map.put(flag, Flag{ .has_param = T != bool, .ptr = @ptrCast(ptr), .fromStr = fromStr(T) });
+        comptime var tp = T;
+        const has_param = blk: inline while (true) {
+            switch (@typeInfo(tp)) {
+                .Bool => break :blk false,
+                .Optional => |opt| tp = opt.child,
+                .ErrorUnion => |errun| tp = errun.payload,
+                inline else => break :blk true,
+            }
+        };
+
+        try self.map.put(flag, Flag{ .has_param = has_param, .ptr = @ptrCast(ptr), .fromStr = fromStr(T) });
     }
 
     pub fn parse(self: *const Parser, argv: []const []const u8) FlagErr!usize {
