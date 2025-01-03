@@ -18,8 +18,14 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(lib);
 
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const lib_unit_tests = b.addTest(.{
-        .root_module = lib_mod,
+        .root_module = test_mod,
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
