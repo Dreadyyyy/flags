@@ -39,10 +39,12 @@ fn fromStr(comptime T: type) fn (*anyopaque, []const u8) FlagErr!void {
                     .Bool => break :blk true,
                     .Int => break :blk std.fmt.parseInt(tp, str, 0) catch return FlagErr.ParseErr,
                     .Float => break :blk std.fmt.parseFloat(tp, str) catch return FlagErr.ParseErr,
-                    .Pointer => |pointer| if (pointer.is_const and pointer.child == u8) break :blk str else @compileError("Flag type not supported"),
+                    .Pointer => break :blk if (tp == []const u8) str else {
+                        @compileError("Flag of type " ++ @typeName(T) ++ " is not supported");
+                    },
                     .Optional => |opt| tp = opt.child,
                     .ErrorUnion => |errun| tp = errun.payload,
-                    inline else => @compileError("Flag type not supported"),
+                    else => @compileError("Flag of type " ++ @typeName(T) ++ " is not supported"),
                 }
             };
         }
@@ -55,12 +57,10 @@ const Flag = struct {
     fromStr: *const fn (*anyopaque, []const u8) FlagErr!void,
 };
 
-const Allocator = std.mem.Allocator;
-
 pub const Parser = struct {
     map: std.StringHashMap(Flag),
 
-    pub fn init(alloc: Allocator) Parser {
+    pub fn init(alloc: std.mem.Allocator) Parser {
         return Parser{ .map = std.StringHashMap(Flag).init(alloc) };
     }
 
@@ -70,8 +70,10 @@ pub const Parser = struct {
 
     pub fn add(self: *Parser, ptr: anytype, flag: []const u8) !void {
         const T = switch (@typeInfo(@TypeOf(ptr))) {
-            .Pointer => |pointer| pointer.child,
-            inline else => @compileError("Argument ptr must be a pointer"),
+            .Pointer => |pointer| if (pointer.size == std.builtin.Type.Pointer.Size.One) pointer.child else {
+                @compileError("Argument ptr must be a single item pointer, not a " ++ @typeName(@TypeOf(ptr)));
+            },
+            else => @compileError("Argument ptr must be a single item pointer, not a " ++ @typeName(@TypeOf(ptr))),
         };
 
         comptime var tp = T;
