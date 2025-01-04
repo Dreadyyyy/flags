@@ -26,6 +26,8 @@ pub const FlagErr = error{
     ParseErr,
     UnknownFlag,
     ParameterErr,
+
+    AllocationErr,
 };
 
 fn fromStr(comptime T: type) fn (*anyopaque, []const u8) FlagErr!void {
@@ -68,9 +70,9 @@ pub const Parser = struct {
         self.map.deinit();
     }
 
-    pub fn add(self: *Parser, ptr: anytype, flag: []const u8) !void {
+    pub fn add(self: *Parser, ptr: anytype, flag: []const u8) FlagErr!void {
         const T = switch (@typeInfo(@TypeOf(ptr))) {
-            .Pointer => |pointer| if (pointer.size == std.builtin.Type.Pointer.Size.One) pointer.child else {
+            .Pointer => |pointer| if (pointer.size == .One) pointer.child else {
                 @compileError("Argument ptr must be a single item pointer, not a " ++ @typeName(@TypeOf(ptr)));
             },
             else => @compileError("Argument ptr must be a single item pointer, not a " ++ @typeName(@TypeOf(ptr))),
@@ -86,18 +88,31 @@ pub const Parser = struct {
             }
         };
 
-        try self.map.put(flag, Flag{ .has_param = has_param, .ptr = @ptrCast(ptr), .fromStr = fromStr(T) });
+        self.map.put(flag, Flag{
+            .has_param = has_param,
+            .ptr = @ptrCast(ptr),
+            .fromStr = fromStr(T),
+        }) catch return FlagErr.AllocationErr;
     }
 
-    pub fn parse(self: *const Parser, argv: []const []const u8) FlagErr!usize {
-        var curr: usize = 0;
-        while (curr < argv.len) : (curr += 1) {
-            if (std.mem.eql(u8, argv[curr], "--")) return curr + 1;
-            if (argv[curr].len > 0 and argv[curr][0] != '-') return curr;
+    pub fn parse(self: *const Parser, alloc: std.mem.Allocator) FlagErr!std.ArrayList([]const u8) {
+        var iter = std.process.argsWithAllocator(alloc) catch return FlagErr.AllocationErr;
+        defer iter.deinit();
+
+        var pos_args = std.ArrayList([]const u8).init(alloc);
+        errdefer pos_args.deinit();
+        pos_args.append(iter.next().?) catch return FlagErr.AllocationErr;
+
+        while (iter.next()) |arg| {
+            if (std.mem.eql(u8, arg, "--")) break;
+            if (arg.len > 0 and arg[0] != '-') {
+                pos_args.append(arg) catch return FlagErr.AllocationErr;
+                break;
+            }
 
             const flag, var param = blk: {
-                const delim = std.mem.indexOfScalar(u8, argv[curr], '=') orelse break :blk .{ argv[curr], null };
-                break :blk .{ argv[curr][0..delim], argv[curr][delim + 1 ..] };
+                const delim = std.mem.indexOfScalar(u8, arg, '=') orelse break :blk .{ arg, null };
+                break :blk .{ arg[0..delim], arg[delim + 1 ..] };
             };
 
             const f = self.map.get(flag) orelse return FlagErr.UnknownFlag;
@@ -105,18 +120,15 @@ pub const Parser = struct {
             if (!f.has_param and param != null) return FlagErr.ParameterErr;
 
             if (f.has_param and param == null) {
-                curr += 1;
-
-                if (curr < argv.len and argv[curr].len != 0 and argv[curr][0] != '-') {
-                    param = argv[curr];
-                } else {
-                    return FlagErr.ParameterErr;
-                }
+                param = iter.next() orelse return FlagErr.ParameterErr;
+                if (param.?.len != 0 and param.?[0] == '-') return FlagErr.ParameterErr;
             }
 
             try f.fromStr(f.ptr, param orelse "");
         }
 
-        return curr;
+        while (iter.next()) |arg| pos_args.append(arg) catch return FlagErr.AllocationErr;
+
+        return pos_args;
     }
 };
